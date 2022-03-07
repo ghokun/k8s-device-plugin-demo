@@ -19,9 +19,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"net/http"
@@ -41,13 +41,11 @@ const (
 	grpcAddress    = "unix:///var/lib/kubelet/pod-resources/kubelet.sock"
 	grpcBufferSize = 4 * 1024 * 1024
 	grpcTimeout    = 5 * time.Second
-	retryTimeout   = 1 * time.Second
 	scrapeInterval = 10 * time.Second
 )
 
 var (
-	devLabels = []string{"Dev_1", "Dev_2", "Dev_3", "Dev_4"}
-	devs      = []*pluginapi.Device{
+	devs = []*pluginapi.Device{
 		{ID: "Dev_1", Health: pluginapi.Healthy},
 		{ID: "Dev_2", Health: pluginapi.Healthy},
 		{ID: "Dev_3", Health: pluginapi.Healthy},
@@ -56,18 +54,17 @@ var (
 	metrics = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "pods_per_devices",
 		Help: "Total number of pods per device",
-	}, devLabels)
+	}, []string{"device", "pods"})
 )
 
-func getPodsUsingResource() {
+func updateMetrics() {
 	resListerClient, clientConn, err := podresources.GetV1Client(grpcAddress, grpcTimeout, grpcBufferSize)
 	defer clientConn.Close()
 	if err != nil {
 		panic(err)
 	}
-	prometheus.MustRegister(metrics)
-
 	for {
+		metrics.Reset()
 		resp, err := resListerClient.List(context.Background(), &podresourcesv1.ListPodResourcesRequest{})
 		if err != nil {
 			klog.Errorf("failed to list pod resources: %v", err)
@@ -75,34 +72,18 @@ func getPodsUsingResource() {
 		if len(resp.PodResources) <= 0 {
 			klog.Infof("No pods using resource %s", resourceName)
 		}
-		assignments := map[string][]string{}
-		for _, dev := range devs {
-			assignments[dev.ID] = []string{}
-		}
 		for _, podRes := range resp.PodResources { // for each pod
 			for _, contRes := range podRes.Containers { // for each container
 				for _, contDevices := range contRes.Devices { // for each device
 					if contDevices.ResourceName == resourceName {
 						for _, deviceId := range contDevices.DeviceIds { // for each device id
-							assignments[deviceId] = append(assignments[deviceId], podRes.Name)
-							// err = metrics.Write(&io_prometheus_client.Metric{Label: []*io_prometheus_client.LabelPair{{Name: &deviceId, Value: &podRes.Name}}})
-							// if err != nil {
-							// klog.Errorf("failed to write metrics: %v", err)
-							// }
+							metrics.WithLabelValues(deviceId, podRes.Name).Set(1)
+							klog.Infof("Pod %s using device %s", podRes.Name, deviceId)
 						}
 					}
 				}
 			}
 		}
-		// for dev, podNames := range assignments {
-		// klog.Infof("Device %s is assigned to pods %s", dev, strings.Join(podNames, ","))
-		// }
-		metrics.With(prometheus.Labels{
-			"Dev_1": strings.Join(assignments["Dev_1"], ","),
-			"Dev_2": strings.Join(assignments["Dev_2"], ","),
-			"Dev_3": strings.Join(assignments["Dev_3"], ","),
-			"Dev_4": strings.Join(assignments["Dev_4"], ","),
-		}).Inc()
 		time.Sleep(scrapeInterval)
 	}
 }
@@ -173,8 +154,12 @@ func main() {
 	if err := dp1.Register(pluginapi.KubeletSocket, resourceName, pluginapi.DevicePluginPath); err != nil {
 		panic(err)
 	}
-	go getPodsUsingResource()
-	http.Handle("/metrics", promhttp.Handler())
-	http.ListenAndServe(":2112", nil)
-	select {}
+
+	r := prometheus.NewRegistry()
+	r.MustRegister(metrics)
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.HandlerFor(r, promhttp.HandlerOpts{}))
+	srv := &http.Server{Addr: ":2112", Handler: mux}
+	go updateMetrics()
+	log.Fatal(srv.ListenAndServe())
 }
