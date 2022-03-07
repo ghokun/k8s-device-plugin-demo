@@ -20,7 +20,12 @@ kubectl create -f daemonset.yaml
 # Run a consumer pod
 kubectl create -f consumer.yaml
 
+# Check metrics (change pod name accordingly)
+kubectl port-forward pod/k8s-device-plugin-demo-daemonset-pnb86 --address 0.0.0.0 2112:2112
+curl -s http://localhost:2112/metrics
+
 # Cleanup
 kind delete cluster
 docker image rm k8s-device-plugin-demo:0.0.1
 ```
+

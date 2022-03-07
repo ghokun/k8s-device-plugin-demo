@@ -3,6 +3,7 @@ kind: Deployment
 metadata:
   name: consumer
 spec:
+  replicas: 4
   selector:
     matchLabels:
       app: consumer

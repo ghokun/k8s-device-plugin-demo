@@ -55,12 +55,14 @@ replace k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.20.7
 replace k8s.io/sample-controller => k8s.io/sample-controller v0.20.7
 
 require (
+	github.com/prometheus/client_golang v1.7.1
 	k8s.io/klog/v2 v2.8.0
 	k8s.io/kubelet v0.0.0
 	k8s.io/kubernetes v1.20.7
 )
 
 require (
+	github.com/Microsoft/go-winio v0.4.15 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
@@ -85,7 +87,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/selinux v1.8.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/prometheus/client_golang v1.7.1 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.10.0 // indirect
 	github.com/prometheus/procfs v0.2.0 // indirect

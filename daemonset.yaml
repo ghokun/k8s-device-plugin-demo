@@ -1,8 +1,36 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: resource-reader-sa
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: resource-reader
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: resource-reader-rb
+subjects:
+  - kind: ServiceAccount
+    name: resource-reader-sa
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: resource-reader
+  apiGroup: rbac.authorization.k8s.io
+---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: k8s-device-plugin-demo-daemonset
-  namespace: kube-system
+  namespace: default
 spec:
   selector:
     matchLabels:
@@ -14,6 +42,7 @@ spec:
       labels:
         name: k8s-device-plugin-demo
     spec:
+      serviceAccountName: resource-reader-sa
       priorityClassName: "system-node-critical"
       containers:
         - image: k8s-device-plugin-demo:0.0.1
@@ -21,7 +50,12 @@ spec:
           volumeMounts:
             - name: device-plugin
               mountPath: /var/lib/kubelet/device-plugins
+            - name: podresources
+              mountPath: /var/lib/kubelet/pod-resources
       volumes:
         - name: device-plugin
           hostPath:
             path: /var/lib/kubelet/device-plugins
+        - name: podresources
+          hostPath:
+            path: /var/lib/kubelet/pod-resources
